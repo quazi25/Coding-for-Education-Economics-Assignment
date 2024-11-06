@@ -1,0 +1,139 @@
+# Coding-for-Education-Economics-Assignment
+* This coding was done for an assignment during MA in Economics degree
+
+clear all
+set more off
+
+cd "C:\Users\HP\Desktop\2024\February\1. York\3. Economics of Education\2. Assignment 1"
+use "STAR_Students", clear
+
+
+***KEEP ONLY STUDENTS RANDOMIZED IN KINDERGARTEN****
+drop if gkclasstype==.
+
+
+***GET COVARIATES***
+**************GENDER*****************
+gen male=(gender==1)
+**************RACE*****************
+gen white=(race==1)
+gen black=(race==2)
+gen asian=(race==3)
+gen hisp=(race==4)
+gen native=(race==5)
+gen other=(race==6)
+gen missing_race=(race==.)
+**********SES STATUS (Measured with FREE LUNCH -- just using Kindergarten SES to measure this)**********
+gen frpm=(gkfreelunch==1)
+gen frpm_missing=(gkfreelunch==.)
+**********SPECIAL ED STATUS (once again just using Kindergarten status -- why? may be endogenous to treatment)**********
+gen spec_ed=(gkspeced==1)
+******USE KINDERGARTEN SCHOOL ID (once again, future school assignment endogenous to treatment)*******
+gen schoolid_k=gkschid
+
+******MATCH TEST SCORES TO GRADE (will just do math and read)*******
+rename gktmathss math_test_score_k
+forvalues g = 1/3{
+rename g`g'tmathss math_test_score_`g'
+}
+
+rename gktreadss read_test_score_k
+forvalues g = 1/3{
+rename g`g'treadss read_test_score_`g'
+}
+
+*************CREATE TREATMENT INDICATOR (i.e., SMALL CLASS) VARIABLE (CLASS TYPE 2 IS REGULAR, TYPE 3 IS REGULAR WITH TA).****************
+****LEFT VARIABLE INDICATES STUDENT LEFT THE EXPERIMENT*******
+gen treat_k=1 if gkclasstype==1
+replace treat_k=0 if gkclasstype==2 | gkclasstype==3 
+
+forvalues g = 1/3{
+gen treat_`g'=1 if g`g'classtype==1
+replace treat_`g'=0 if (g`g'classtype==2 | g`g'classtype==3)
+gen left_`g'=1 if (g`g'classtype==.)
+replace left_`g'=0 if (g`g'classtype==1 | g`g'classtype==2 | g`g'classtype==3)
+}
+*
+**************************************
+**************************************
+*              Part A 
+*************************************
+*************************************
+****ONE PERIOD MODEL****
+reg math_test_score_k treat_k , r
+***WITH COVARIATES***
+reg math_test_score_k treat_k i.male i.white i.black i.asian i.hisp i.native i.other i.missing_race i.frpm i.frpm_missing i.spec_ed i.birthmonth i.birthyear , r
+*Summary stats for math score in kindergarten across students not in small classes
+sum math_test_score_k if treat_k==1
+
+* (i) We regressed student math scores in kindergarten on an indicator for being (randomly) assigned to a small class. Due to the fact that the students were put into small and regular classes randomly, it no longer depends on any other variables such as gender or race. Hence, the coefficient barely changes when we include controls. 
+* (ii) Expressing δS1 in terms of test score SD units among students in the control group (divide δS1 by the SD = 49.51013)
+
+di 7.935952 / 49.51013
+
+* (iii) estimating equation 2 in terms of reading score in kindergarden
+
+reg read_test_score_k treat_k , r
+reg read_test_score_k treat_k i.male i.white i.black i.asian i.hisp i.native i.other i.missing_race i.frpm i.frpm_missing i.spec_ed i.birthmonth i.birthyear , r
+*Summary stats for reading score in kindergarten across students not in small classes
+sum read_test_score_k if treat_k==1
+* Expressing new δS1 in terms of test score SD units
+di 5.463244 / 49.51013
+di 5.027235 / 49.51013
+
+****************************************************************************
+******************* Part B *************************************************
+****************************************************************************
+
+*CREATE TREATMENT INDICATOR for grade 1(i.e., SMALL CLASS) VARIABLE (CLASS TYPE 2 IS REGULAR, TYPE 3 IS REGULAR WITH TA).****************
+*LEFT VARIABLE INDICATES STUDENT LEFT THE EXPERIMENT*******
+gen treat_grade_1=1 if g1classtype== 1
+replace treat_grade_1=0 if g1classtype== 2 | g1classtype== 3
+
+****Two PERIOD MODEL****
+reg math_test_score_1 treat_k treat_grade_1 treat_k##treat_grade_1 , r
+
+***************************************************************************
+************************* Part C ******************************************
+***************************************************************************
+reg math_test_score_1 treat_k treat_grade_1 treat_k##treat_grade_1 i.male i.white i.black i.asian i.hisp i.native i.other i.missing_race i.frpm i.frpm_missing i.spec_ed i.birthmonth i.birthyear , r
+
+***************************************************************************
+************************* Part D ******************************************
+***************************************************************************
+* (i) a binary indicator variable for swticher from small class in kindergarten to regular class in grade 1 
+gen switcher_small_to_reg=(treat_k==1 & treat_grade_1==0)
+gen switcher_reg_to_small=(treat_k==0 & treat_grade_1==1)
+* statistical difference along the following variables 
+
+tab treat_k treat_grade_1 if switcher_small_to_reg==1
+tab treat_k treat_grade_1 if switcher_small_to_reg==0
+
+reg white switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+reg black switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+reg frpm switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+reg male switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+reg math_test_score_k switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+reg read_test_score_k switcher_small_to_reg if (switcher_small_to_reg==1 | switcher_reg_to_small==1), r
+
+* (ii) binary indicator for switchers and non switchers
+gen non_switcher= switcher_small_to_reg==0 & switcher_reg_to_small==0
+* statistical difference along the following variables 
+reg white non_switcher if (non_switcher==1 | non_switcher==0), r
+reg black non_switcher if (non_switcher==1 | non_switcher==0), r
+reg frpm non_switcher if (non_switcher==1 | non_switcher==0), r
+reg male non_switcher if (non_switcher==1 | non_switcher==0), r
+reg math_test_score_k non_switcher if (non_switcher==1 | non_switcher==0), r
+reg read_test_score_k non_switcher if (non_switcher==1 | non_switcher==0), r
+
+
+* (iii) regress equation 3 for the sample of non-switchers and switchers
+
+reg math_test_score_1 treat_k treat_grade_1 treat_k##treat_grade_1 if (non_switcher==1) , r
+reg math_test_score_1 treat_k treat_grade_1 treat_k##treat_grade_1 if (non_switcher==0) , r
+
+***************************************************************************
+************************* Part E ******************************************
+***************************************************************************
+reg left_1 treat_k, r 
+reg left_1 treat_k white frpm male, r
